@@ -2,7 +2,7 @@
    Tag Lab Shop | site.js
    Lo unico que debes editar en todo el sitio: GTM_ID
    ========================================================== */
-var GTM_ID = "GTM-XXXXXXX";
+var GTM_ID = "GTM-M46ZM7GS";
 
 window.dataLayer = window.dataLayer || [];
 
