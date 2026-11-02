@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Tag Lab Shop</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="site.js"></script>
+</head>
+<body>
+  <div id="gtm-warning" class="warn" hidden>
+    Falta configurar GTM_ID en site.js. Mientras tanto GTM no se carga.
+  </div>
+
+  <header>
+    <h1>Tag Lab Shop</h1>
+    <p>Tienda de práctica para GTM, GA4, Meta Pixel y Conversions API. No se cobra nada.</p>
+  </header>
+
+  <main>
+    <h2>Parámetros de esta URL</h2>
+    <p class="note">GA4 lee las UTMs de la URL de aterrizaje de forma automática. Aquí solo las mostramos para que veas qué recibe.</p>
+    <div class="card">
+      <table id="params"></table>
+    </div>
+
+    <h2>Productos</h2>
+    <div class="grid" id="products"></div>
+
+    <h2>Carrito</h2>
+    <div class="card">
+      <ul class="cart" id="cart-list"></ul>
+      <p id="cart-total"><strong>Total: USD 0.00</strong></p>
+      <button type="button" id="pay">Pagar (simulado)</button>
+      <p class="msg" id="msg" role="status"></p>
+    </div>
+  </main>
+
+  <footer>
+    <p>Eventos que esta página envía al dataLayer: add_to_cart y begin_checkout. El evento purchase sale en la página de gracias.</p>
+  </footer>
+
+  <script>
+    (function () {
+      var PARAM_NAMES = ["utm_source", "utm_medium", "utm_campaign", "utm_id", "utm_term", "utm_content", "fbclid"];
+
+      function renderParams() {
+        var table = document.getElementById("params");
+        var qs = new URLSearchParams(window.location.search);
+        PARAM_NAMES.forEach(function (name) {
+          var tr = document.createElement("tr");
+          var th = document.createElement("th");
+          var td = document.createElement("td");
+          th.textContent = name;
+          td.textContent = qs.get(name) || "(vacío)";
+          tr.appendChild(th);
+          tr.appendChild(td);
+          table.appendChild(tr);
+        });
+      }
+
+      function renderProducts() {
+        var grid = document.getElementById("products");
+        PRODUCTS.forEach(function (p) {
+          var card = document.createElement("article");
+          card.className = "card";
+          var h = document.createElement("h3");
+          h.textContent = p.item_name;
+          var price = document.createElement("p");
+          price.className = "price";
+          price.textContent = CURRENCY + " " + p.price.toFixed(2);
+          var btn = document.createElement("button");
+          btn.type = "button";
+          btn.textContent = "Agregar al carrito";
+          btn.addEventListener("click", function () {
+            addToCart(p.item_id);
+            renderCart();
+            document.getElementById("msg").textContent = p.item_name + " agregado.";
+          });
+          card.appendChild(h);
+          card.appendChild(price);
+          card.appendChild(btn);
+          grid.appendChild(card);
+        });
+      }
+
+      function renderCart() {
+        var cart = getCart();
+        var list = document.getElementById("cart-list");
+        list.innerHTML = "";
+        if (!cart.length) {
+          var empty = document.createElement("li");
+          empty.textContent = "El carrito está vacío.";
+          list.appendChild(empty);
+        }
+        cart.forEach(function (i) {
+          var li = document.createElement("li");
+          var left = document.createElement("span");
+          var right = document.createElement("span");
+          left.textContent = i.item_name + " x " + i.quantity;
+          right.textContent = CURRENCY + " " + (i.price * i.quantity).toFixed(2);
+          li.appendChild(left);
+          li.appendChild(right);
+          list.appendChild(li);
+        });
+        document.getElementById("cart-total").innerHTML = "";
+        var strong = document.createElement("strong");
+        strong.textContent = "Total: " + CURRENCY + " " + cartValue(cart).toFixed(2);
+        document.getElementById("cart-total").appendChild(strong);
+      }
+
+      document.getElementById("pay").addEventListener("click", function () {
+        var ok = checkout();
+        if (!ok) document.getElementById("msg").textContent = "Agrega al menos un producto antes de pagar.";
+      });
+
+      renderParams();
+      renderProducts();
+      renderCart();
+    })();
+  </script>
+</body>
+</html>

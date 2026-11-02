@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Gracias por tu compra | Tag Lab Shop</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="site.js"></script>
+</head>
+<body>
+  <div id="gtm-warning" class="warn" hidden>
+    Falta configurar GTM_ID en site.js. Mientras tanto GTM no se carga.
+  </div>
+
+  <header>
+    <h1>Gracias por tu compra</h1>
+    <p id="status">Cargando orden...</p>
+  </header>
+
+  <main id="content" hidden>
+    <h2>Datos de la compra</h2>
+    <div class="card">
+      <table id="order-table"></table>
+    </div>
+    <p class="note">El evento <code>purchase</code> se empuja al dataLayer una sola vez por orden. Si recargas esta página no se repite. Para repetirlo a propósito y ver qué pasa, usa el botón de abajo.</p>
+    <div class="row">
+      <a class="btn secondary" href="gracias.html?replay=1">Repetir purchase (replay)</a>
+      <a class="btn" href="index.html">Nueva compra de prueba</a>
+    </div>
+
+    <h2>Panel de la Conversions API</h2>
+    <p class="note">
+      Este JSON es el cuerpo de la llamada del servidor, con el mismo <code>event_id</code> que usa el pixel.
+      Pégalo en Postman o guárdalo como <code>payload.json</code> y envíalo con curl. El access token no va aquí: es una credencial y nunca debe estar en el sitio ni en el repositorio.
+    </p>
+    <label for="test-code">test_event_code (de Events Manager, pestaña Test Events; déjalo vacío para enviar un evento real)</label>
+    <input type="text" id="test-code" placeholder="TEST12345" autocomplete="off">
+    <label for="test-email">Email de prueba (se envía hasheado con SHA-256)</label>
+    <input type="email" id="test-email" value="prueba@example.com" autocomplete="off">
+    <div class="row">
+      <button type="button" id="refresh">Actualizar JSON y cookies</button>
+      <button type="button" class="secondary" id="copy">Copiar JSON</button>
+    </div>
+    <p class="msg" id="msg" role="status"></p>
+    <textarea id="payload" readonly aria-label="JSON del evento Purchase para la Conversions API"></textarea>
+  </main>
+
+  <script>
+    (function () {
+      var order = null;
+
+      function load() {
+        try { order = JSON.parse(localStorage.getItem("lab_order") || "null"); }
+        catch (e) { order = null; }
+      }
+      function save() {
+        try { localStorage.setItem("lab_order", JSON.stringify(order)); } catch (e) {}
+      }
+
+      function pushPurchaseOnce() {
+        var replay = /[?&]replay=1/.test(window.location.search);
+        if (order.pushed && !replay) return false;
+        if (!order.event_time) order.event_time = Math.floor(Date.now() / 1000);
+        pushEvent("purchase", {
+          transaction_id: order.transaction_id,
+          currency: order.currency,
+          value: order.value,
+          items: order.items
+        }, { event_id: order.event_id });
+        order.pushed = true;
+        save();
+        return true;
+      }
+
+      function row(table, label, value) {
+        var tr = document.createElement("tr");
+        var th = document.createElement("th");
+        var td = document.createElement("td");
+        th.textContent = label;
+        td.textContent = value;
+        tr.appendChild(th);
+        tr.appendChild(td);
+        table.appendChild(tr);
+      }
+
+      function renderOrder() {
+        var table = document.getElementById("order-table");
+        table.innerHTML = "";
+        row(table, "transaction_id", order.transaction_id);
+        row(table, "event_id", order.event_id);
+        row(table, "event_time (unix)", String(order.event_time));
+        row(table, "value", order.currency + " " + Number(order.value).toFixed(2));
+        row(table, "items", order.items.map(function (i) { return i.item_name + " x " + i.quantity; }).join(", "));
+        row(table, "_fbp (cookie)", getCookie("_fbp") || "(aún no existe)");
+        row(table, "_fbc (cookie)", getCookie("_fbc") || "(vacío: solo existe si llegas desde un clic en un anuncio de Meta)");
+      }
+
+      function buildPayload(emHash) {
+        var userData = { client_user_agent: navigator.userAgent };
+        var fbp = getCookie("_fbp");
+        var fbc = getCookie("_fbc");
+        if (fbp) userData.fbp = fbp;
+        if (fbc) userData.fbc = fbc;
+        if (emHash) userData.em = [emHash];
+        var body = {
+          data: [{
+            event_name: "Purchase",
+            event_time: order.event_time,
+            event_id: order.event_id,
+            action_source: "website",
+            event_source_url: window.location.origin + window.location.pathname,
+            user_data: userData,
+            custom_data: { currency: order.currency, value: Number(order.value) }
+          }]
+        };
+        var code = document.getElementById("test-code").value.trim();
+        if (code) body.test_event_code = code;
+        return JSON.stringify(body, null, 2);
+      }
+
+      function refresh() {
+        renderOrder();
+        var email = document.getElementById("test-email").value.trim().toLowerCase();
+        var done = function (hash) {
+          document.getElementById("payload").value = buildPayload(hash);
+        };
+        if (email) sha256Hex(email).then(done); else done("");
+      }
+
+      document.getElementById("refresh").addEventListener("click", refresh);
+      document.getElementById("copy").addEventListener("click", function () {
+        copyText(document.getElementById("payload").value, function () {
+          document.getElementById("msg").textContent = "JSON copiado.";
+        });
+      });
+
+      load();
+      if (!order) {
+        document.getElementById("status").textContent =
+          "No hay una orden guardada. Haz una compra de prueba desde la página de inicio.";
+        var link = document.createElement("a");
+        link.className = "btn";
+        link.href = "index.html";
+        link.textContent = "Ir a la tienda";
+        document.querySelector("header").appendChild(link);
+        return;
+      }
+
+      var pushed = pushPurchaseOnce();
+      document.getElementById("status").textContent = pushed
+        ? "Se envió el evento purchase al dataLayer."
+        : "La orden ya se había enviado antes, por eso no se repitió el evento purchase.";
+      document.getElementById("content").hidden = false;
+      refresh();
+      setTimeout(refresh, 2500);
+    })();
+  </script>
+</body>
+</html>
